@@ -1,8 +1,4 @@
 ﻿using Microsoft.Extensions.Configuration;
-using Ardin.TelegramSummaryBot.Models.Ardin.TelegramSummaryBot.Models;
-using OpenQA.Selenium;
-using OpenQA.Selenium.Chrome;
-using OpenQA.Selenium.Support.UI;
 
 namespace TelegramSummaryBot;
 
@@ -28,6 +24,7 @@ class Program
             .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
             .Build();
     }
+
     private static async Task RunSchedulerAsync(IConfiguration config, bool forceRun)
     {
         Console.WriteLine($"Scheduler initialized. Force run flag: {forceRun}");
@@ -53,7 +50,8 @@ class Program
                 try
                 {
                     var botOrchestrator = new BotOrchestrator(config);
-                    await botOrchestrator.ExecuteWorkflowAsync();
+
+                    await botOrchestrator.ExecuteCurrentHourTasksAsync(iranTime);
 
                     Console.WriteLine("=== Task COMPLETED Successfully ===");
                 }

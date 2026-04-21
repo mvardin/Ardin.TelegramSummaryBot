@@ -1,49 +1,111 @@
 ﻿using Ardin.TelegramSummaryBot.Models.Ardin.TelegramSummaryBot.Models;
 using Microsoft.Extensions.Configuration;
+using TelegramSummaryBot;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
-using TelegramSummaryBot;
 
 public class BotOrchestrator
 {
     private readonly IConfiguration _config;
+    private readonly LocalRepository _repository;
 
     public BotOrchestrator(IConfiguration config)
     {
         _config = config;
+        _repository = new LocalRepository();
     }
 
-    public async Task ExecuteWorkflowAsync()
+    public async Task ExecuteCurrentHourTasksAsync(DateTime currentTime)
     {
-        List<NewsMessage> recentMessages;
+        Console.WriteLine("--- Executing Hourly News Workflow ---");
+        await ExecuteHourlyWorkflowAsync();
 
-        // 1. استخراج پیام‌ها از طریق سلنیوم
-        using (var scraper = new BaleWebScraper(_config))
+        int[] analysisHours = [8, 14, 21];
+
+        if (analysisHours.Contains(currentTime.Hour))
         {
-            scraper.Initialize();
-            var allMessages = await scraper.ScrapeChannelsAsync();
-            recentMessages = FilterRecentMessages(allMessages, hours: 1);
+            Console.WriteLine($"\n--- Analysis hour ({currentTime.Hour}) detected. Executing Analysis Workflow ---");
+
+            int hoursToLookBack = 6;
+            if (currentTime.Hour == 8) hoursToLookBack = 10;
+            else if (currentTime.Hour == 14) hoursToLookBack = 6; // اصلاح کامنت شما: 8 تا 14 میشه 6 ساعت
+            else if (currentTime.Hour == 21) hoursToLookBack = 7; // 14 تا 21 میشه 7 ساعت
+
+            await ExecuteAnalysisWorkflowAsync(hoursToLookBack);
+        }
+    }
+
+    private async Task ExecuteHourlyWorkflowAsync()
+    {
+        var allMessages = new List<NewsMessage>();
+
+        // 1. دریافت اخبار از بله
+        Console.WriteLine("--- Scraping Bale ---");
+        try
+        {
+            using (var baleScraper = new BaleWebScraper(_config))
+            {
+                baleScraper.Initialize();
+                var baleMessages = await baleScraper.ScrapeChannelsAsync();
+                allMessages.AddRange(baleMessages);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error scraping Bale: {ex.Message}");
         }
 
-        Console.WriteLine($"Found {recentMessages.Count} recent messages in the last 1 hour.");
+        // 2. دریافت اخبار از تلگرام
+        Console.WriteLine("--- Scraping Telegram ---");
+        try
+        {
+            using (var tgScraper = new TelegramWebScraper(_config))
+            {
+                tgScraper.Initialize();
+                var tgMessages = await tgScraper.ScrapeChannelsAsync();
+                allMessages.AddRange(tgMessages);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error scraping Telegram: {ex.Message}");
+        }
+
+        // 3. فیلتر کردن اخبار 1 ساعت اخیر
+        var recentMessages = FilterRecentMessages(allMessages, hours: 1);
+
+        // 4. ذخیره در دیتابیس محلی
+        await _repository.SaveAndCleanupNewsAsync(recentMessages);
 
         if (!recentMessages.Any())
         {
-            Console.WriteLine("No recent messages found. Skipping AI and Telegram steps.");
+            Console.WriteLine("No recent messages found to summarize.");
             return;
         }
 
-        // 2. ارسال به هوش مصنوعی برای خلاصه‌سازی
         Console.WriteLine("Sending messages to AI for summarization...");
         var aiService = new AiSummaryService(Tokens.AIKey);
         var aiSummary = await aiService.GenerateNewsSummary(recentMessages);
-        Console.WriteLine("AI summary received.");
 
-        // 3. ارسال به کانال بله
-        await SendToBaleChannelAsync(aiSummary);
+        await SendToBaleChannelAsync(aiSummary, isAnalysis: false);
+    }
+
+    private async Task ExecuteAnalysisWorkflowAsync(int hoursToLookBack)
+    {
+        var analysisNews = await _repository.GetNewsSinceAsync(hoursToLookBack);
+        var previousAnalyses = await _repository.GetAnalysesAsync();
+
+        Console.WriteLine($"Found {analysisNews.Count} saved messages and {previousAnalyses.Count} past analyses.");
+
+        if (!analysisNews.Any()) return;
+
+        var aiService = new AiSummaryService(Tokens.AIKey);
+        var aiAnalysis = await aiService.GenerateDeepAnalysis(analysisNews, previousAnalyses);
+
+        await _repository.SaveAndCleanupAnalysisAsync(aiAnalysis);
+        await SendToBaleChannelAsync(aiAnalysis, isAnalysis: true);
     }
 
     private List<NewsMessage> FilterRecentMessages(List<NewsMessage> messages, int hours)
@@ -52,23 +114,27 @@ public class BotOrchestrator
         var timeLimit = DateTimeOffset.UtcNow.AddHours(-hours);
 
         return messages
+            .Where(m => m.DateUnix != 0)
             .Where(m => DateTimeOffset.FromUnixTimeMilliseconds(m.DateUnix) >= timeLimit)
             .ToList();
     }
 
-    private async Task SendToBaleChannelAsync(string aiContent)
+    private async Task SendToBaleChannelAsync(string aiContent, bool isAnalysis)
     {
-        Console.WriteLine("Sending summary to Bale...");
+        Console.WriteLine(isAnalysis ? "Sending ANALYSIS to Bale..." : "Sending HOURLY SUMMARY to Bale...");
+
+        string header = isAnalysis
+            ? "📊 تحلیل و جمع‌بندی اخبار ساعات گذشته\n\n"
+            : "🔴 سرتیتر مهم‌ترین اخبار یک ساعت اخیر\n\n";
 
         var baleMessage =
-            $"🔴 سرتیتر مهم‌ترین اخبار یک ساعت اخیر\n\n" +
+            $"{header}" +
             $"{aiContent}\n\n" +
-            $"📡 @ZTVOfficial";
+            $"📡 @ZBriefNews";
 
         var baleClient = new BaleClient(Tokens.BaleToken);
-        await baleClient.Send("@ztvofficial", baleMessage);
+        await baleClient.Send("@zbriefnews", baleMessage);
 
         Console.WriteLine("Message sent to Bale.");
     }
 }
-

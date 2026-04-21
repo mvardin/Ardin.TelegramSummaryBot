@@ -33,7 +33,7 @@ public class BaleWebScraper : IDisposable
 
     public async Task<List<NewsMessage>> ScrapeChannelsAsync()
     {
-        var channels = _config.GetSection("Telegram:Channels").Get<string[]>();
+        var channels = _config.GetSection("Bale:Channels").Get<string[]>();
         Console.WriteLine($"Loaded {channels.Length} channels from config.");
 
         var allMessages = new List<NewsMessage>();
@@ -76,7 +76,7 @@ public class BaleWebScraper : IDisposable
 
         Console.WriteLine("Extracting HTML...");
         var html = messageListEl.GetAttribute("outerHTML");
-        var extracted = HtmlNewsExtractor.ExtractMessages(html);
+        var extracted = HtmlNewsExtractor.BaleExtractMessages(html);
 
         Console.WriteLine($"Extracted {extracted.Count} messages from channel {channelId}");
         return extracted;
