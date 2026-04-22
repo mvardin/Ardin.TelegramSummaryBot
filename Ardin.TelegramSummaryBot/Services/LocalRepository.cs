@@ -28,9 +28,9 @@ public class LocalRepository
         allNews.AddRange(newMessages);
         allNews = allNews.DistinctBy(m => m.Sid).ToList(); // فرض بر این است که MessageId یا Link یکتاست
 
-        // حذف اخبار قدیمی‌تر از 24 ساعت
-        var timeLimit = DateTimeOffset.UtcNow.AddHours(-24).ToUnixTimeMilliseconds();
-        allNews = allNews.Where(m => m.DateUnix >= timeLimit).ToList();
+        //// حذف اخبار قدیمی‌تر از 24 ساعت
+        //var timeLimit = DateTimeOffset.UtcNow.AddDays(-700).ToUnixTimeMilliseconds();
+        //allNews = allNews.Where(m => m.DateUnix >= timeLimit).ToList();
 
         await File.WriteAllTextAsync(_newsFile, JsonSerializer.Serialize(allNews));
     }
@@ -43,7 +43,7 @@ public class LocalRepository
         return allNews.Where(m => m.DateUnix >= timeLimit).ToList();
     }
 
-    private async Task<List<NewsMessage>> GetAllNewsAsync()
+    public async Task<List<NewsMessage>> GetAllNewsAsync()
     {
         if (!File.Exists(_newsFile)) return new List<NewsMessage>();
         var json = await File.ReadAllTextAsync(_newsFile);

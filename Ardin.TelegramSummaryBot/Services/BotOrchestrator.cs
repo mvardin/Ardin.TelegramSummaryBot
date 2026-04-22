@@ -74,7 +74,7 @@ public class BotOrchestrator
         }
 
         // 3. فیلتر کردن اخبار 1 ساعت اخیر
-        var recentMessages = FilterRecentMessages(allMessages, hours: 1);
+        var recentMessages = await FilterNewMessagesAsync(allMessages, hours: 1);
 
         // 4. ذخیره در دیتابیس محلی
         await _repository.SaveAndCleanupNewsAsync(recentMessages);
@@ -108,16 +108,27 @@ public class BotOrchestrator
         await SendToBaleChannelAsync(aiAnalysis, isAnalysis: true);
     }
 
-    private List<NewsMessage> FilterRecentMessages(List<NewsMessage> messages, int hours)
+    private async Task<List<NewsMessage>> FilterNewMessagesAsync(List<NewsMessage> messages, int hours)
     {
-        Console.WriteLine($"Filtering messages newer than {hours} hour(s)...");
-        var timeLimit = DateTimeOffset.UtcNow.AddHours(-hours);
+        Console.WriteLine($"Filtering new messages...");
 
-        return messages
-            .Where(m => m.DateUnix != 0)
-            .Where(m => DateTimeOffset.FromUnixTimeMilliseconds(m.DateUnix) >= timeLimit)
+        // دریافت اخبار قدیمی از دیتابیس (حتما باید await شود)
+        // فرض بر این است که متد شما لیست برمی‌گرداند
+        var oldNews = await _repository.GetAllNewsAsync();
+
+        // استفاده از HashSet برای افزایش سرعت جستجو
+        var existingSids = oldNews.Select(x => x.Sid).ToHashSet();
+        var existingDates = oldNews.Select(x => x.DateUnix).ToHashSet();
+
+        // فیلتر کردن پیام‌های جدید:
+        // پیام‌هایی که Sid آن‌ها در دیتابیس نیست "و" DateUnix آن‌ها هم در دیتابیس نیست
+        var newMessages = messages
+            .Where(m => !existingSids.Contains(m.Sid) || !existingDates.Contains(m.DateUnix))
             .ToList();
+
+        return newMessages;
     }
+
 
     private async Task SendToBaleChannelAsync(string aiContent, bool isAnalysis)
     {
