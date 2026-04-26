@@ -416,3 +416,10 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+*.mp3
+/piper/output/9fc56ab0-5a08-4095-b0df-5dabeb25da75.mp3
+/piper/output/9fc56ab0-5a08-4095-b0df-5dabeb25da75.wav
+/piper/output/9fc56ab0-5a08-4095-b0df-5dabeb25da75.mp3
+/piper/output/9ef8b172-a654-46b4-afa4-38c0e3099142.wav
+/piper/output/bf704934-fb39-45bd-b2a3-08205ce1a8fb.mp3
+/piper/output/bf704934-fb39-45bd-b2a3-08205ce1a8fb.wav
