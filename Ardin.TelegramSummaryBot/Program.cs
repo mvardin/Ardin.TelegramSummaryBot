@@ -1,4 +1,6 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Ardin.TelegramSummaryBot.Services;
+using Microsoft.Extensions.Configuration;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace TelegramSummaryBot;
 
@@ -11,7 +13,6 @@ class Program
         // 1. Load Configuration
         var config = LoadConfiguration();
 
-        // 2. Start Scheduler
         bool forceRun = args.Contains("--run");
         await RunSchedulerAsync(config, forceRun);
     }
@@ -39,7 +40,7 @@ class Program
             bool alreadyRunThisHour = lastRunTime.HasValue &&
                                       lastRunTime.Value.Date == iranTime.Date &&
                                       lastRunTime.Value.Hour == iranTime.Hour;
-
+            
             if (forceRun || (isTopOfHour && !alreadyRunThisHour))
             {
                 // خاموش کردن فلگ اجرای اجباری تا فقط یک بار اجرا شود
@@ -49,6 +50,7 @@ class Program
                 Console.WriteLine($"\n=== Task STARTED at {iranTime:yyyy-MM-dd HH:mm:ss} ===");
                 try
                 {
+
                     var botOrchestrator = new BotOrchestrator(config);
 
                     await botOrchestrator.ExecuteCurrentHourTasksAsync(iranTime);

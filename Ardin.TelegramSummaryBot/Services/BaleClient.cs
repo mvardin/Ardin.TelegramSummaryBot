@@ -11,52 +11,140 @@ public class BaleClient
         _token = token;
     }
 
-    public async Task<bool> Send(long chatId, string msg, string parseMode = "Markdown")
+    // --------------------------------------------------------
+    // Retry Helper
+    // --------------------------------------------------------
+    private async Task<T?> Retry<T>(Func<Task<T?>> action, string actionName)
     {
-        var url = $"https://tapi.bale.ai/bot{_token}/sendMessage";
+        int[] delays = { 5, 10, 20, 30, 60 }; // seconds
 
-        var payload = new
+        for (int i = 0; i < delays.Length; i++)
         {
-            chat_id = chatId,          // می‌تواند ID کانال باشد
-            text = msg,
-            parse_mode = parseMode,     // Markdown یا HTML
-            disable_web_page_preview = true
-        };
+            try
+            {
+                var result = await action();
+                if (result is not null)
+                    return result;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[{actionName}] Exception (Attempt {i + 1}): {ex.Message}");
+            }
 
-        var response = await _http.PostAsJsonAsync(url, payload);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var error = await response.Content.ReadAsStringAsync();
-            Console.WriteLine("Bale API Error: " + error);
-            return false;
+            Console.WriteLine($"[{actionName}] Failed Attempt {i + 1}. Retrying in {delays[i]} seconds...");
+            await Task.Delay(delays[i] * 1000);
         }
 
-        return true;
+        Console.WriteLine($"[{actionName}] All Retry Attempts Failed.");
+        return default;
     }
 
-    // نسخه‌ای که از username هم پشتیبانی می‌کند (مثلاً "@ZedTV")
-    public async Task<bool> Send(string channelUsername, string msg, string parseMode = "Markdown")
+    // --------------------------------------------------------
+    // 1) Send text by chat ID  (returns bool)
+    // --------------------------------------------------------
+    public Task<bool?> Send(long chatId, string msg, string parseMode = "Markdown")
     {
-        var url = $"https://tapi.bale.ai/bot{_token}/sendMessage";
-
-        var payload = new
+        return Retry<bool?>(async () =>
         {
-            chat_id = channelUsername,
-            text = msg,
-            parse_mode = parseMode,
-            disable_web_page_preview = true
-        };
+            var url = $"https://tapi.bale.ai/bot{_token}/sendMessage";
 
-        var response = await _http.PostAsJsonAsync(url, payload);
+            var payload = new
+            {
+                chat_id = chatId,
+                text = msg,
+                parse_mode = parseMode,
+                disable_web_page_preview = true
+            };
 
-        if (!response.IsSuccessStatusCode)
+            var response = await _http.PostAsJsonAsync(url, payload);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"[SendToId] API Error: {await response.Content.ReadAsStringAsync()}");
+                return null;
+            }
+
+            return true;
+        }, "SendToId");
+    }
+
+    // --------------------------------------------------------
+    // 2) Send text by channel username (returns message_id)
+    // --------------------------------------------------------
+    public Task<int?> Send(string channelUsername, string msg, string parseMode = "Markdown")
+    {
+        return Retry<int?>(async () =>
         {
-            var error = await response.Content.ReadAsStringAsync();
-            Console.WriteLine("Bale API Error: " + error);
-            return false;
-        }
+            var url = $"https://tapi.bale.ai/bot{_token}/sendMessage";
 
-        return true;
+            var payload = new
+            {
+                chat_id = channelUsername,
+                text = msg,
+                parse_mode = parseMode,
+                disable_web_page_preview = true
+            };
+
+            var response = await _http.PostAsJsonAsync(url, payload);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"[SendToUser] API Error: {await response.Content.ReadAsStringAsync()}");
+                return null;
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                if (root.TryGetProperty("result", out var resultElement) &&
+                    resultElement.TryGetProperty("message_id", out var msgId))
+                {
+                    return msgId.GetInt32();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SendToUser] JSON Parse Error: {ex.Message}");
+            }
+
+            return null;
+        }, "SendToUser");
+    }
+
+    // --------------------------------------------------------
+    // 3) Send voice reply (returns bool)
+    // --------------------------------------------------------
+    public Task<bool?> SendVoiceReply(string channelUsername, string voiceFilePath, int replyToMessageId)
+    {
+        return Retry<bool?>(async () =>
+        {
+            var url = $"https://tapi.bale.ai/bot{_token}/sendAudio";
+
+            using var multipart = new MultipartFormDataContent();
+
+            multipart.Add(new StringContent(channelUsername), "chat_id");
+            multipart.Add(new StringContent(replyToMessageId.ToString()), "reply_to_message_id");
+
+            var fileBytes = await File.ReadAllBytesAsync(voiceFilePath);
+            var fileContent = new ByteArrayContent(fileBytes);
+            fileContent.Headers.ContentType =
+                new System.Net.Http.Headers.MediaTypeHeaderValue("audio/mpeg");
+
+            multipart.Add(fileContent, "audio", Path.GetFileName(voiceFilePath));
+
+            var response = await _http.PostAsync(url, multipart);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"[SendVoice] API Error: {await response.Content.ReadAsStringAsync()}");
+                return null;
+            }
+
+            return true;
+        }, "SendVoice");
     }
 }

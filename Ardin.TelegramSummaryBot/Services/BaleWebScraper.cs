@@ -42,6 +42,7 @@ public class BaleWebScraper : IDisposable
         {
             var messages = await ScrapeSingleChannelAsync(channel);
             allMessages.AddRange(messages);
+            await Task.Delay(TimeSpan.FromSeconds(5));
         }
 
         return allMessages;

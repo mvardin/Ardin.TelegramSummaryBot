@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Ardin.TelegramSummaryBot.Services;
 
 public class BotOrchestrator
 {
@@ -144,7 +145,13 @@ public class BotOrchestrator
             $"📡 @ZBriefNews";
 
         var baleClient = new BaleClient(Tokens.BaleToken);
-        await baleClient.Send("@zbriefnews", baleMessage);
+        var messageId = await baleClient.Send("@zbriefnews", baleMessage);
+        if (messageId.HasValue)
+        {
+            TTSService ttsService = new TTSService(_config);
+            string voicePath = await ttsService.Convert(baleMessage);
+            await baleClient.SendVoiceReply("@zbriefnews", voicePath, messageId.Value);
+        }
 
         Console.WriteLine("Message sent to Bale.");
     }

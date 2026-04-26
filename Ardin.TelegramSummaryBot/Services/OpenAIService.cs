@@ -39,7 +39,6 @@ public class AiSummaryService
 
         return await ExecuteAiRequestAsync(systemPrompt, userPrompt);
     }
-
     public async Task<string> GenerateDeepAnalysis(List<NewsMessage> news, List<AnalysisRecord> previousAnalyses)
     {
         var rawText = BuildNewsText(news);
@@ -66,8 +65,33 @@ public class AiSummaryService
 
         return await ExecuteAiRequestAsync(systemPrompt, userPrompt);
     }
+    public async Task<string> OptimizeToTTS(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return string.Empty;
 
-    // --- متدهای کمکی (Private Helpers) ---
+        string systemPrompt = @"شما یک ویراستار حرفه‌ای برای موتورهای تبدیل متن به گفتار (TTS) هستید.
+                                وظیفه شما آماده‌سازی متن برای خوانش طبیعی، روان و بدون خطا توسط گوینده اخبار است.
+
+                                قوانین الزامی:
+                                ۱. حذف اضافات: تمام ایموجی‌ها، لینک‌ها و آیدی‌های شبکه‌های اجتماعی (مثل @ZBriefNews) را از داخل متن خبرها کاملاً حذف کن.
+                                ۲. تبدیل اعداد به حروف: تمام اعداد، تاریخ‌ها و نمادها باید به حروف نوشته شوند تا TTS اشتباه نخواند.
+                                ۳. روان‌سازی متن: بولت‌پوینت‌ها را به جملات خبری روان تبدیل کن.
+                                ۴. پیوستگی و جریان خبر: در ابتدای برخی اخبار از کلمات ربط تنوع‌بخش (مانند: همچنین، از سوی دیگر، در خبر دیگری) استفاده کن.
+                                ۵. نشانه‌گذاری برای مکث: از ویرگول (،) برای مکث‌های کوتاه درون‌جمله‌ای و از نقطه (.) برای مکث طولانی پایان جمله استفاده کن.
+                                ۶. چارچوب: لحن کاملاً رسمی و خبری باشد.
+                                ۷. مقدمه و مؤخره (الزامی): متن را حتماً با یک مقدمه کوتاه و رسمی شروع کن (مثلاً: «شنوندگان گرامی، به خلاصه اخبار از کانال خلاصه سریع اخبار توجه فرمایید.»)
+                                و با یک پایان‌بندی مناسب تمام کن (مثلاً: «از همراهی شما با کانال خلاصه سریع اخبار سپاسگزاریم.»).
+                                ۸. خروجی: فقط متن نهایی خوانش را برگردان و هیچ توضیح اضافه‌ای نده.";
+
+
+        string userPrompt = $"این اخبار قرار است توسط موتور صوتی خوانده شود." +
+                            $" آن را طبق قوانین گفته شده، برای خوانش صوتی بهینه و استاندارد کن:\n\n{text}";
+
+
+        return await ExecuteAiRequestAsync(systemPrompt, userPrompt);
+    }
+
 
     private async Task<string> ExecuteAiRequestAsync(string systemPrompt, string userPrompt)
     {
@@ -84,7 +108,6 @@ public class AiSummaryService
         var response = await chat.CompleteChatAsync(chatMessages);
         return response?.Value.Content[0].Text.Trim() ?? string.Empty;
     }
-
     private string BuildNewsText(List<NewsMessage> messages)
     {
         var builder = new StringBuilder();

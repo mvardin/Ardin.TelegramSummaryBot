@@ -42,6 +42,7 @@ public class TelegramWebScraper : IDisposable
         {
             var messages = await ScrapeSingleChannelByNameAsync(channel);
             allMessages.AddRange(messages);
+            await Task.Delay(TimeSpan.FromSeconds(5));
         }
 
         return allMessages;
@@ -49,100 +50,108 @@ public class TelegramWebScraper : IDisposable
 
     private async Task<List<NewsMessage>> ScrapeSingleChannelByNameAsync(string channelName)
     {
-        Console.WriteLine($"Opening Telegram Web...");
-        string baseUrl = "https://web.telegram.org/a/";
-
-        await _driver.Navigate().GoToUrlAsync(baseUrl);
-
-        var wait = new WebDriverWait(_driver, TimeSpan.FromSeconds(20));
-
-        // 1. پیدا کردن بخش جستجو (search box)
-        Console.WriteLine("Waiting for search input...");
-        var searchInput = wait.Until(d =>
+        try
         {
-            try
-            {
-                var el = d.FindElement(By.CssSelector("input[placeholder='Search']"));
-                return el.Displayed ? el : null;
-            }
-            catch { return null; }
-        });
+            Console.WriteLine($"Opening Telegram Web...");
+            string baseUrl = "https://web.telegram.org/a/";
 
-        // 2. تایپ اسم کانال داخل بخش جستجو
-        Console.WriteLine($"Searching for channel: {channelName}");
-        searchInput.Clear();
-        searchInput.SendKeys(channelName);
-        Thread.Sleep(5000);
-        searchInput.Clear();
-        Thread.Sleep(1000);
-        searchInput.SendKeys(channelName);
-        Thread.Sleep(1000);
+            await _driver.Navigate().GoToUrlAsync(baseUrl);
 
-        // 3. منتظر نتایج جستجو بمانیم
-        Console.WriteLine("Waiting for search results...");
-        var searchResults = wait.Until(d =>
-        {
-            try
-            {
-                // گرفتن همه المان‌های لیست نتایج جستجو: div با کلاس‌های search-result و chat-item-clickable
-                var list = d.FindElements(By.CssSelector("div.search-result.chat-item-clickable"));
-                return list.Count > 0 ? list : null;
-            }
-            catch { return null; }
-        });
+            var wait = new WebDriverWait(_driver, TimeSpan.FromSeconds(20));
 
-        var targetChannel = searchResults.FirstOrDefault(el =>
-        {
-            try
+            // 1. پیدا کردن بخش جستجو (search box)
+            Console.WriteLine("Waiting for search input...");
+            var searchInput = wait.Until(d =>
             {
-                // یافتن تگ h3 با کلاس fullName داخل هر آیتم برای بررسی نام کانال
-                var titleEl = el.FindElement(By.CssSelector("h3.fullName"));
-                if (titleEl != null)
-                    return true;
-                return false;
-            }
-            catch
-            {
-                return false;
-            }
-        });
+                try
+                {
+                    var el = d.FindElement(By.CssSelector("input[placeholder='Search']"));
+                    return el.Displayed ? el : null;
+                }
+                catch { return null; }
+            });
 
-        if (targetChannel != null)
-        {
-            // کلیک روی کانال هدف
-            targetChannel.Click();
+            // 2. تایپ اسم کانال داخل بخش جستجو
+            Console.WriteLine($"Searching for channel: {channelName}");
+            searchInput.Clear();
+            searchInput.SendKeys(channelName);
+            Thread.Sleep(5000);
+            searchInput.Clear();
+            Thread.Sleep(1000);
+            searchInput.SendKeys(channelName);
+            Thread.Sleep(1000);
+
+            // 3. منتظر نتایج جستجو بمانیم
+            Console.WriteLine("Waiting for search results...");
+            var searchResults = wait.Until(d =>
+            {
+                try
+                {
+                    // گرفتن همه المان‌های لیست نتایج جستجو: div با کلاس‌های search-result و chat-item-clickable
+                    var list = d.FindElements(By.CssSelector("div.search-result.chat-item-clickable"));
+                    return list.Count > 0 ? list : null;
+                }
+                catch { return null; }
+            });
+
+            var targetChannel = searchResults.FirstOrDefault(el =>
+            {
+                try
+                {
+                    // یافتن تگ h3 با کلاس fullName داخل هر آیتم برای بررسی نام کانال
+                    var titleEl = el.FindElement(By.CssSelector("h3.fullName"));
+                    if (titleEl != null)
+                        return true;
+                    return false;
+                }
+                catch
+                {
+                    return false;
+                }
+            });
+
+            if (targetChannel == null)
+            {
+            }
+            else
+            {
+                // کلیک روی کانال هدف
+                targetChannel.Click();
+            }
+
+            // 5. منتظر بارگذاری پیام‌ها داخل کانال بمانیم
+            Console.WriteLine("Waiting for messages to load...");
+            var messageListEl = wait.Until(d =>
+            {
+                try
+                {
+                    var el = d.FindElement(By.CssSelector("div.MessageList"));
+                    return el.Displayed ? el : null;
+                }
+                catch { return null; }
+            });
+
+            ScrollToBottom();
+
+            wait.Until(d =>
+            {
+                try { return messageListEl.FindElements(By.CssSelector("div.Message")).Count > 0; }
+                catch { return false; }
+            });
+
+            Console.WriteLine("Extracting HTML...");
+            var html = messageListEl.GetAttribute("outerHTML");
+
+            var extracted = HtmlNewsExtractor.TelegramExtractMessages(html);
+
+            Console.WriteLine($"Extracted {extracted.Count} messages from channel {channelName}");
+            return extracted;
         }
-        else
+        catch (Exception ex)
         {
+            Console.WriteLine($"Error for {channelName}, {ex.Message}");
+            return [];
         }
-
-        // 5. منتظر بارگذاری پیام‌ها داخل کانال بمانیم
-        Console.WriteLine("Waiting for messages to load...");
-        var messageListEl = wait.Until(d =>
-        {
-            try
-            {
-                var el = d.FindElement(By.CssSelector("div.MessageList"));
-                return el.Displayed ? el : null;
-            }
-            catch { return null; }
-        });
-
-        ScrollToBottom();
-
-        wait.Until(d =>
-        {
-            try { return messageListEl.FindElements(By.CssSelector("div.Message")).Count > 0; }
-            catch { return false; }
-        });
-
-        Console.WriteLine("Extracting HTML...");
-        var html = messageListEl.GetAttribute("outerHTML");
-
-        var extracted = HtmlNewsExtractor.TelegramExtractMessages(html);
-
-        Console.WriteLine($"Extracted {extracted.Count} messages from channel {channelName}");
-        return extracted;
     }
 
     private void ScrollToBottom()
