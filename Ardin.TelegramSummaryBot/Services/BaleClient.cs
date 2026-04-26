@@ -138,13 +138,10 @@ public class BaleClient
 
             var response = await _http.PostAsync(url, multipart);
 
-            if (!response.IsSuccessStatusCode)
-            {
-                Console.WriteLine($"[SendVoice] API Error: {await response.Content.ReadAsStringAsync()}");
-                return null;
-            }
+            if (response.IsSuccessStatusCode) return true;
+            Console.WriteLine($"[SendVoice] API Error: {await response.Content.ReadAsStringAsync()}");
+            return null;
 
-            return true;
         }, "SendVoice");
     }
 }
