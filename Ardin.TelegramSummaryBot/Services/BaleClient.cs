@@ -129,7 +129,7 @@ public class BaleClient
             multipart.Add(new StringContent(channelUsername), "chat_id");
             multipart.Add(new StringContent(replyToMessageId.ToString()), "reply_to_message_id");
 
-            var fileBytes = await File.ReadAllBytesAsync(voiceFilePath);
+            var fileBytes = await File.ReadAllBytesAsync($"اخبار صوتی {replyToMessageId}");
             var fileContent = new ByteArrayContent(fileBytes);
             fileContent.Headers.ContentType =
                 new System.Net.Http.Headers.MediaTypeHeaderValue("audio/mpeg");
