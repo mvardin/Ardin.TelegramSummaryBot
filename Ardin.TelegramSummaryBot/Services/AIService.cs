@@ -1,16 +1,18 @@
 ﻿using Ardin.TelegramSummaryBot.Models.Ardin.TelegramSummaryBot.Models;
 using OpenAI;
+using OpenAI.Audio;
 using OpenAI.Chat;
 using System.ClientModel;
 using System.Text;
+using System.Text.Json;
 using TelegramSummaryBot;
 
-public class AiSummaryService
+public class AIService
 {
     private readonly OpenAIClient _client;
     private const string ModelName = "gpt-4o-mini"; // تعریف مدل در یک ثابت
 
-    public AiSummaryService(string apiKey)
+    public AIService(string apiKey)
     {
         _client = new OpenAIClient(
             new ApiKeyCredential(apiKey),
@@ -91,6 +93,32 @@ public class AiSummaryService
 
         return await ExecuteAiRequestAsync(systemPrompt, userPrompt);
     }
+
+
+    public async Task<string> GenerateSpeechToFile(string text, string outputPath)
+    {
+        try
+        {
+            var audioClient = _client.GetAudioClient("gpt-4o-realtime-preview-tts");
+
+            var options = new SpeechGenerationOptions()
+            {
+                ResponseFormat = GeneratedSpeechFormat.Mp3,
+            };
+
+            var audioStream = await audioClient.GenerateSpeechAsync(text, new GeneratedSpeechVoice("echo"), options);
+
+            await using var file = File.Create(outputPath);
+            await audioStream.Value.ToStream().CopyToAsync(file);
+
+            return outputPath;
+        }
+        catch (Exception ex)
+        {
+        }
+        return string.Empty;
+    }
+
 
 
     private async Task<string> ExecuteAiRequestAsync(string systemPrompt, string userPrompt)

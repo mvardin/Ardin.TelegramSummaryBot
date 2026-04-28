@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Ardin.TelegramSummaryBot.Services;
+using OpenQA.Selenium.Chrome;
 
 public class BotOrchestrator
 {
@@ -36,6 +37,49 @@ public class BotOrchestrator
 
             await ExecuteAnalysisWorkflowAsync(hoursToLookBack);
         }
+    }
+    public async Task ManualLoginAsync()
+    {
+        var options = new ChromeOptions();
+        options.AddArgument("--headless=new");
+        options.AddArgument("--window-size=1920,1080");
+        options.AddArgument("--no-sandbox");
+        options.AddArgument("--disable-dev-shm-usage");
+
+        // --- این دو خط جدید را اضافه کنید ---
+        options.AddArgument("--remote-allow-origins=*");
+        options.AddArgument("--remote-debugging-address=0.0.0.0");
+
+        // 🔴 مسیر پوشه پروفایل (حتما مطمئن شوید این مسیر دسترسی نوشتن دارد)
+        options.AddArgument("--user-data-dir=/home/workarea/chrome_profile");
+
+        // 🔴 فعال‌سازی پورت دیباگ برای اتصال از ویندوز
+        options.AddArgument("--remote-debugging-port=9222");
+
+        Console.WriteLine("Starting Chrome in Remote Debugging mode...");
+        using var driver = new ChromeDriver(options);
+
+        // باز کردن سایت مورد نظر
+        driver.Navigate().GoToUrl("https://web.bale.ai/");
+
+        Console.WriteLine("\n=========================================================");
+        Console.WriteLine("🌐 CHROME IS WAITING FOR MANUAL LOGIN...");
+        Console.WriteLine("Please follow these steps on your WINDOWS machine:");
+        Console.WriteLine("1. Open CMD or PowerShell.");
+        Console.WriteLine("2. Run this exact command to create an SSH tunnel:");
+        Console.WriteLine("   ssh -L 9222:localhost:9222 root@103.75.198.10");
+        Console.WriteLine("3. Open Chrome on Windows and go to:");
+        Console.WriteLine("   http://localhost:9222");
+        Console.WriteLine("4. Click on 'Bale' link, and login using your mouse/keyboard.");
+        Console.WriteLine("=========================================================");
+        Console.WriteLine("\nPress [ENTER] here ONLY AFTER you have successfully logged in...");
+
+        // برنامه اینجا متوقف می‌شود تا شما لاگین کنید و بعد اینتر بزنید
+        Console.ReadLine();
+
+        Console.WriteLine("Saving profile and closing browser...");
+        driver.Quit();
+        Console.WriteLine("✅ Profile saved successfully! Now you can run the bot normally.");
     }
 
     private async Task ExecuteHourlyWorkflowAsync()
@@ -87,12 +131,11 @@ public class BotOrchestrator
         }
 
         Console.WriteLine("Sending messages to AI for summarization...");
-        var aiService = new AiSummaryService(Tokens.AIKey);
+        var aiService = new AIService(Tokens.AIKey);
         var aiSummary = await aiService.GenerateNewsSummary(recentMessages);
 
         await SendToBaleChannelAsync(aiSummary, isAnalysis: false);
     }
-
     private async Task ExecuteAnalysisWorkflowAsync(int hoursToLookBack)
     {
         var analysisNews = await _repository.GetNewsSinceAsync(hoursToLookBack);
@@ -102,13 +145,12 @@ public class BotOrchestrator
 
         if (!analysisNews.Any()) return;
 
-        var aiService = new AiSummaryService(Tokens.AIKey);
+        var aiService = new AIService(Tokens.AIKey);
         var aiAnalysis = await aiService.GenerateDeepAnalysis(analysisNews, previousAnalyses);
 
         await _repository.SaveAndCleanupAnalysisAsync(aiAnalysis);
         await SendToBaleChannelAsync(aiAnalysis, isAnalysis: true);
     }
-
     private async Task<List<NewsMessage>> FilterNewMessagesAsync(List<NewsMessage> messages, int hours)
     {
         Console.WriteLine($"Filtering new messages...");
@@ -129,8 +171,6 @@ public class BotOrchestrator
 
         return newMessages;
     }
-
-
     private async Task SendToBaleChannelAsync(string aiContent, bool isAnalysis)
     {
         Console.WriteLine(isAnalysis ? "Sending ANALYSIS to Bale..." : "Sending HOURLY SUMMARY to Bale...");

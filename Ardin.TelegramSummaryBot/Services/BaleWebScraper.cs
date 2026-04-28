@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Ardin.TelegramSummaryBot.Services;
 
 public class BaleWebScraper : IDisposable
 {
@@ -21,11 +22,8 @@ public class BaleWebScraper : IDisposable
 
     public void Initialize()
     {
-        var options = GetChromeOptions();
-        var service = CreateChromeDriverService();
-
         Console.WriteLine("Starting ChromeDriver...");
-        _driver = new ChromeDriver(service, options);
+        _driver = new ChromeDriverManager(_config).GetChromeDriver();
 
         Console.WriteLine("Checking Login Status...");
         CheckLogin();
@@ -104,9 +102,11 @@ public class BaleWebScraper : IDisposable
         _driver.ExecuteScript("window.localStorage.setItem('app.web.language', 'fa');");
         _driver.Navigate().Refresh();
 
+        // مکث اولیه برای لود شدن کامل ساختار صفحه
         Thread.Sleep(5000);
         var wait = new WebDriverWait(_driver, TimeSpan.FromSeconds(30));
 
+        // بررسی لاگین بودن
         if (!_driver.PageSource.Contains("Login.tsx"))
         {
             Console.WriteLine("Already logged in.");
@@ -114,66 +114,64 @@ public class BaleWebScraper : IDisposable
         }
 
         Console.WriteLine("Login required. Waiting for login button...");
+        IJavaScriptExecutor js = (IJavaScriptExecutor)_driver; // تعریف اجراکننده جاوا اسکریپت
+
         try
         {
             var loginButton = wait.Until(d => d.FindElement(By.XPath("//button[contains(text(),'ورود')]")));
-            loginButton.Click();
+
+            // --- راه حل خطای Element Click Intercepted ---
+            // 1. اول اسکرول روی دکمه
+            js.ExecuteScript("arguments[0].scrollIntoView({block: 'center'});", loginButton);
+            Thread.Sleep(500); // نیم ثانیه صبر برای انیمیشن‌های احتمالی
+
+            // 2. کلیک با استفاده از جاوا اسکریپت (دور زدن بنرهای مزاحم)
+            js.ExecuteScript("arguments[0].click();", loginButton);
+            Console.WriteLine("Clicked on login button via JS.");
         }
-        catch (WebDriverTimeoutException)
+        catch (Exception ex) // تغییر به Exception کلی برای گرفتن خطاهای Intercepted و Timeout
         {
             var fileName = $"page_source_error_{DateTime.Now:yyyyMMdd_HHmmss}.html";
             File.WriteAllText(fileName, _driver.PageSource);
-            Console.WriteLine($"Login button not found. Page source saved: {fileName}");
+            Console.WriteLine($"Error clicking login button. Page source saved: {fileName}");
+            Console.WriteLine($"Error Details: {ex.Message}");
             throw;
         }
 
+        // وارد کردن شماره تماس
+        Console.WriteLine("Entering phone number...");
         var input = wait.Until(d => d.FindElement(By.CssSelector("input[aria-label='شماره همراه']")));
         input.Clear();
         input.SendKeys("09359147574"); // می‌توان این را هم از کانفیگ خواند
 
+        // کلیک روی دکمه تایید و ادامه (اینجا هم از JS استفاده می‌کنیم تا خطای مشابه ندهد)
+        Console.WriteLine("Clicking submit button...");
         var btnSubmit = wait.Until(d => d.FindElement(By.XPath("//button[contains(text(),'تایید و ادامه')]")));
-        btnSubmit.Click();
+        js.ExecuteScript("arguments[0].scrollIntoView({block: 'center'});", btnSubmit);
+        Thread.Sleep(500);
+        js.ExecuteScript("arguments[0].click();", btnSubmit);
 
+        // ⚠️ هشدار: این خط روی سرورهای لینوکسی در پس‌زمینه برنامه را قفل می‌کند!
+        // فقط در صورتی استفاده کنید که برنامه را مستقیماً در ترمینال (مثل tmux) اجرا می‌کنید.
         Console.Write("Enter OTP: ");
         var otp = Console.ReadLine();
 
+        if (string.IsNullOrWhiteSpace(otp))
+        {
+            throw new Exception("OTP cannot be empty!");
+        }
+
+        // وارد کردن کد تایید
         Console.WriteLine("Submitting OTP...");
         var otpInput = wait.Until(d => d.FindElement(By.CssSelector("input[data-testid='otp-input']")));
         otpInput.Clear();
         otpInput.SendKeys(otp);
 
         Console.WriteLine("Login process completed.");
+
+        // یک مکث کوتاه برای اینکه سایت لاگین را پردازش کند
+        Thread.Sleep(3000);
     }
-
-    private ChromeOptions GetChromeOptions()
-    {
-        var userDataDir = _config["ChromeSettings:UserDataDir"];
-        var profileDirectory = _config["ChromeSettings:ProfileDirectory"];
-
-        var options = new ChromeOptions
-        {
-            BinaryLocation = _config["ChromeSettings:ChromeDirectory"]
-        };
-
-        options.AddArgument("--headless=new");
-        options.AddArgument("--no-sandbox");
-        options.AddArgument("--disable-dev-shm-usage");
-        options.AddArgument("--disable-gpu");
-        options.AddArgument("--window-size=1920,1080");
-        options.AddArgument("--remote-debugging-port=9222");
-        options.AddArgument($"--user-data-dir={userDataDir}");
-        options.AddArgument($"--profile-directory={profileDirectory}");
-
-        return options;
-    }
-
-    private ChromeDriverService CreateChromeDriverService()
-    {
-        var service = ChromeDriverService.CreateDefaultService(_config["ChromeSettings:ChromeDriverDirectory"]);
-        service.EnableVerboseLogging = true;
-        return service;
-    }
-
     public void Dispose()
     {
         _driver?.Quit();

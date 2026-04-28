@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Ardin.TelegramSummaryBot.Services;
 
 public class TelegramWebScraper : IDisposable
 {
@@ -21,11 +22,8 @@ public class TelegramWebScraper : IDisposable
 
     public void Initialize()
     {
-        var options = GetChromeOptions();
-        var service = CreateChromeDriverService();
-
         Console.WriteLine("Starting ChromeDriver for Telegram...");
-        _driver = new ChromeDriver(service, options);
+        _driver = new ChromeDriverManager(_config).GetChromeDriver();
 
         Console.WriteLine("Checking Login Status...");
         CheckLogin();
@@ -239,35 +237,6 @@ public class TelegramWebScraper : IDisposable
 
         Thread.Sleep(5000); // صبر برای تکمیل لاگین و لود شدن صفحه چت‌ها
         Console.WriteLine("Login process completed.");
-    }
-
-    private ChromeOptions GetChromeOptions()
-    {
-        var userDataDir = _config["ChromeSettings:UserDataDir"];
-        var profileDirectory = _config["ChromeSettings:ProfileDirectory"];
-
-        var options = new ChromeOptions
-        {
-            BinaryLocation = _config["ChromeSettings:ChromeDirectory"]
-        };
-
-        options.AddArgument("--headless=new");
-        options.AddArgument("--no-sandbox");
-        options.AddArgument("--disable-dev-shm-usage");
-        options.AddArgument("--disable-gpu");
-        options.AddArgument("--window-size=1920,1080");
-        options.AddArgument("--remote-debugging-port=9223");
-        options.AddArgument($"--user-data-dir={userDataDir}");
-        options.AddArgument($"--profile-directory={profileDirectory}");
-
-        return options;
-    }
-
-    private ChromeDriverService CreateChromeDriverService()
-    {
-        var service = ChromeDriverService.CreateDefaultService(_config["ChromeSettings:ChromeDriverDirectory"]);
-        service.EnableVerboseLogging = true;
-        return service;
     }
 
     public void Dispose()

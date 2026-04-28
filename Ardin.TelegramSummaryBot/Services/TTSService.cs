@@ -14,7 +14,7 @@ namespace Ardin.TelegramSummaryBot.Services
 
             try
             {
-                var aiSummaryService = new AiSummaryService(Tokens.AIKey);
+                var aiSummaryService = new AIService(Tokens.AIKey);
 
                 Console.WriteLine("[TTS] Optimizing text for speech...");
                 var optimizedText = await aiSummaryService.OptimizeToTTS(text);
@@ -22,7 +22,7 @@ namespace Ardin.TelegramSummaryBot.Services
                 Console.WriteLine($"[TTS] Optimized text length: {optimizedText.Length}");
 
                 Console.WriteLine("[TTS] Converting text to WAV using Piper...");
-                string wavPath = convertTextToSpeech(configuration, optimizedText);
+                string wavPath = await convertTextToSpeech(configuration, optimizedText);
 
                 if (string.IsNullOrWhiteSpace(wavPath) || !File.Exists(wavPath))
                 {
@@ -54,7 +54,7 @@ namespace Ardin.TelegramSummaryBot.Services
             }
         }
 
-        private string convertTextToSpeech(IConfiguration configuration, string text)
+        private async Task<string> convertTextToSpeech(IConfiguration configuration, string text)
         {
             try
             {
@@ -66,7 +66,8 @@ namespace Ardin.TelegramSummaryBot.Services
                     return string.Empty;
                 }
 
-                Console.WriteLine($"[TTS] Piper root: {piperRoot}");
+                // پیش‌پردازش متن برای خوانش بهتر (اختیاری اما به شدت توصیه شده برای متون طولانی)
+                text = PreprocessPersianText(text);
 
                 var wavPath = Path.Combine(piperRoot, "output", Guid.NewGuid() + ".wav");
                 Directory.CreateDirectory(Path.GetDirectoryName(wavPath)!);
@@ -75,8 +76,16 @@ namespace Ardin.TelegramSummaryBot.Services
                 string modelPath = Path.Combine(piperRoot, "voices/fa/fa_IR-amir-medium.onnx");
                 string espeakPath = Path.Combine(piperRoot, "espeak-ng-data");
 
-                Console.WriteLine("[TTS] Piper executable: " + piperExe);
-                Console.WriteLine("[TTS] Model: " + modelPath);
+                // تنظیمات صدا (این مقادیر را تست کنید تا به بهترین حالت برسید)
+                // --length_scale: سرعت خواندن (عدد بزرگتر = کندتر، مثلا 1.1 یا 1.2 برای اخبار مناسب‌تر است)
+                // --noise_scale: میزان تنوع در تولید حروف صدادار (حدود 0.667 پیش‌فرض است)
+                // --noise_w: تنوع در طول فونم‌ها (حدود 0.333 پیش‌فرض است)
+                string speed = "1.1";
+                string noiseScale = "0.667";
+                string noiseW = "0.333";
+
+                string arguments = $"-m \"{modelPath}\" --espeak_data \"{espeakPath}\" " +
+                                   $"--length_scale {speed} --noise_scale {noiseScale} --noise_w {noiseW} -f \"{wavPath}\"";
 
                 ProcessStartInfo psi = new ProcessStartInfo()
                 {
@@ -86,41 +95,39 @@ namespace Ardin.TelegramSummaryBot.Services
                     RedirectStandardError = true,
                     RedirectStandardOutput = false,
                     UseShellExecute = false,
-                    Arguments = $"-m \"{modelPath}\" --espeak_data \"{espeakPath}\" -f \"{wavPath}\""
+                    CreateNoWindow = true,
+                    Arguments = arguments
                 };
 
                 var stopwatch = Stopwatch.StartNew();
 
-                using (Process process = new Process())
+                using (Process process = new Process() { StartInfo = psi })
                 {
-                    process.StartInfo = psi;
-
                     Console.WriteLine("[TTS] Starting Piper process...");
                     process.Start();
 
+                    // ارسال متن به صورت Stream با کدگذاری UTF-8
                     using (var writer = new StreamWriter(process.StandardInput.BaseStream, new UTF8Encoding(false)))
                     {
-                        writer.Write(text);
+                        await writer.WriteAsync(text);
                     }
 
-                    string err = process.StandardError.ReadToEnd();
+                    // خواندن خطاها به صورت غیرهمگام
+                    string err = await process.StandardError.ReadToEndAsync();
 
-                    process.WaitForExit();
-
+                    await process.WaitForExitAsync();
                     stopwatch.Stop();
 
                     Console.WriteLine($"[TTS] Piper finished in {stopwatch.ElapsedMilliseconds} ms");
 
                     if (process.ExitCode != 0)
                     {
-                        Console.WriteLine("[TTS] Piper failed.");
-                        Console.WriteLine("[TTS] Piper error output: " + err);
+                        Console.WriteLine("[TTS] Piper failed. Error: " + err);
                         throw new Exception("Piper error: " + err);
                     }
                 }
 
                 Console.WriteLine($"[TTS] WAV file generated: {wavPath}");
-
                 return wavPath;
             }
             catch (Exception ex)
@@ -128,6 +135,19 @@ namespace Ardin.TelegramSummaryBot.Services
                 Console.WriteLine("[TTS] convertTextToSpeech ERROR: " + ex);
                 return string.Empty;
             }
+        }
+        private string PreprocessPersianText(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return input;
+
+            // ۱. جایگزینی فاصله‌های اضافی قبل از علائم نگارشی تا مکث‌ها درست اعمال شوند
+            input = input.Replace(" .", ".").Replace(" ،", "،").Replace(" ?", "؟").Replace(" !", "!");
+
+            // ۲. برای متون خبری، Piper به علائم نگارشی (نقطه و ویرگول) برای نفس‌گیری نیاز دارد.
+            // مطمئن شوید متن شما پاراگراف‌بندی و نقطه‌گذاری صحیحی دارد.
+            // می‌توانید در صورت نیاز علائم خاصی که موتور اشتباه می‌خواند را اینجا حذف یا جایگزین کنید.
+
+            return input;
         }
     }
 }
