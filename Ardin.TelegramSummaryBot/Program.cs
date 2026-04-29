@@ -15,6 +15,14 @@ class Program
 
         var config = LoadConfiguration();
 
+        if (args.Contains("--ai"))
+        {
+            var aiService = new AIService(config);
+            string test = await aiService.OptimizeToTTS("این متن تستی هست، یعنی این سرویس داره درست کار میکنه اینجا");
+            Console.WriteLine(test);
+            return;
+        }
+
         // 1. چک کردن حالت لاگین دستی (Remote Debugging)
         if (args.Contains("--login"))
         {
