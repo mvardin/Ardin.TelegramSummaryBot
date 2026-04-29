@@ -11,7 +11,7 @@ public class BaleClient
     public BaleClient(IConfiguration configuration)
     {
         _configuration = configuration;
-        _token = _configuration.GetValue<string>("AI:Token");
+        _token = _configuration.GetValue<string>("Bale:BotToken");
     }
 
     // --------------------------------------------------------
@@ -49,7 +49,7 @@ public class BaleClient
     {
         return Retry<bool?>(async () =>
         {
-            var url = $"https://tapi.bale.ai/bot{_token}/sendMessage";
+            var url = $"https://tapi.bale.ai/{_token}/sendMessage";
 
             var payload = new
             {
@@ -78,7 +78,8 @@ public class BaleClient
     {
         return Retry<int?>(async () =>
         {
-            var url = $"https://tapi.bale.ai/bot{_token}/sendMessage";
+            var url = $"https://tapi.bale.ai/{_token}/sendMessage";
+            Console.WriteLine(url);
 
             var payload = new
             {
@@ -125,7 +126,7 @@ public class BaleClient
     {
         return Retry<bool?>(async () =>
         {
-            var url = $"https://tapi.bale.ai/bot{_token}/sendAudio";
+            var url = $"https://tapi.bale.ai/{_token}/sendAudio";
 
             using var multipart = new MultipartFormDataContent();
 
@@ -146,5 +147,42 @@ public class BaleClient
             return null;
 
         }, "SendVoice");
+    }
+
+    public async Task<object?> GetMe()
+    {
+        try
+        {
+            var url = $"https://tapi.bale.ai/{_token}/getMe";
+            Console.WriteLine(url);
+
+            var response = await _http.GetAsync(url);
+
+            var json = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"[GetMe] API Error: {json}");
+                return null;
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement.Clone(); // clone → returnable
+
+                return root;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[GetMe] JSON Parse Error: {ex.Message}");
+                return null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GetMe] Exception: {ex.Message}");
+            return null;
+        }
     }
 }

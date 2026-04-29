@@ -11,15 +11,24 @@ class Program
 {
     static async Task Main(string[] args)
     {
-        Console.WriteLine("=== BOT STARTED ===");
+        Console.WriteLine("=== BOT STARTED V 1.18.40 ===");
 
         var config = LoadConfiguration();
 
         if (args.Contains("--ai"))
         {
             var aiService = new AIService(config);
-            string test = await aiService.OptimizeToTTS("این متن تستی هست، یعنی این سرویس داره درست کار میکنه اینجا");
+            var test = await aiService.OptimizeToTTS("این متن تستی هست، یعنی این سرویس داره درست کار میکنه اینجا");
             Console.WriteLine(test);
+            return;
+        }
+
+        if (args.Contains("--bale"))
+        {
+            var baleClient = new BaleClient(config);
+            var messageid = await baleClient.Send("@ztvofficial", "بله داره درست کار میکنه!");
+            var botInfo = await baleClient.GetMe();
+            Console.WriteLine($"{messageid} - {botInfo}");
             return;
         }
 
