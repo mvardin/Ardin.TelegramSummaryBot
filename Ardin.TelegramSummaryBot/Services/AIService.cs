@@ -5,18 +5,21 @@ using OpenAI.Chat;
 using System.ClientModel;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 using TelegramSummaryBot;
 
 public class AIService
 {
+    private readonly IConfiguration _configuration;
     private readonly OpenAIClient _client;
-    private const string ModelName = "gpt-4o-mini"; // تعریف مدل در یک ثابت
+    private const string ModelName = "gpt-4o-mini";
 
-    public AIService(string apiKey)
+    public AIService(IConfiguration configuration)
     {
+        _configuration = configuration;
         _client = new OpenAIClient(
-            new ApiKeyCredential(apiKey),
-            new OpenAIClientOptions { Endpoint = new Uri("https://api.gapgpt.app/v1") });
+            new ApiKeyCredential(_configuration.GetValue<string>("AI:Token")),
+            new OpenAIClientOptions { Endpoint = new Uri(_configuration.GetValue<string>("AI:BaseUrl")) });
     }
 
     public async Task<string> GenerateNewsSummary(List<NewsMessage> messages)

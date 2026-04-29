@@ -14,7 +14,7 @@ namespace Ardin.TelegramSummaryBot.Services
 
             try
             {
-                var aiSummaryService = new AIService(Tokens.AIKey);
+                var aiSummaryService = new AIService(configuration);
 
                 Console.WriteLine("[TTS] Optimizing text for speech...");
                 var optimizedText = await aiSummaryService.OptimizeToTTS(text);
@@ -34,10 +34,10 @@ namespace Ardin.TelegramSummaryBot.Services
 
                 var mp3Path = wavPath.Replace(".wav", ".mp3");
 
-                string backgroundPath = "C:\\Workplace\\Ardin.TelegramSummaryBot\\ffmpeg\\background.mp3";
+                string backgroundPath = configuration.GetValue<string>("Piper:BackgroundNewsMusic");
 
                 Console.WriteLine("[TTS] Adding background music...");
-                mp3Path = await new AudioProcessor().AddBackgroundMusicAsync(
+                mp3Path = await new AudioProcessor(configuration).AddBackgroundMusicAsync(
                     wavPath,
                     backgroundPath,
                     mp3Path,

@@ -131,7 +131,7 @@ public class BotOrchestrator
         }
 
         Console.WriteLine("Sending messages to AI for summarization...");
-        var aiService = new AIService(Tokens.AIKey);
+        var aiService = new AIService(_config);
         var aiSummary = await aiService.GenerateNewsSummary(recentMessages);
 
         await SendToBaleChannelAsync(aiSummary, isAnalysis: false);
@@ -145,7 +145,7 @@ public class BotOrchestrator
 
         if (!analysisNews.Any()) return;
 
-        var aiService = new AIService(Tokens.AIKey);
+        var aiService = new AIService(_config);
         var aiAnalysis = await aiService.GenerateDeepAnalysis(analysisNews, previousAnalyses);
 
         await _repository.SaveAndCleanupAnalysisAsync(aiAnalysis);
@@ -184,7 +184,7 @@ public class BotOrchestrator
             $"{aiContent}\n\n" +
             $"📡 @ZBriefNews";
 
-        var baleClient = new BaleClient(Tokens.BaleToken);
+        var baleClient = new BaleClient(_config);
         var messageId = await baleClient.Send("@zbriefnews", baleMessage);
         if (messageId.HasValue)
         {

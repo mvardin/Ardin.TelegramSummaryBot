@@ -2,12 +2,16 @@
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 
 public class AudioProcessor
 {
-    // مسیر دقیق فایل اجرایی ffmpeg
-    private readonly string _ffmpegPath = @"C:\Workplace\Ardin.TelegramSummaryBot\ffmpeg\ffmpeg.exe";
+    private readonly IConfiguration _configuration;
 
+    public AudioProcessor(IConfiguration configuration)
+    {
+        _configuration = configuration;
+    }
     /// <summary>
     /// متدی برای قرار دادن آهنگ پس‌زمینه روی فایل صوتی اصلی
     /// </summary>
@@ -18,6 +22,7 @@ public class AudioProcessor
     /// <returns>مسیر فایل خروجی</returns>
     public async Task<string> AddBackgroundMusicAsync(string inputWavPath, string backgroundMp3Path, string outputFilePath, double bgVolume = 0.15)
     {
+        var _ffmpegPath = _configuration.GetValue<string>("Piper:FFMPEGPath");
         // بررسی وجود فایل‌های ورودی
         if (!File.Exists(inputWavPath))
             throw new FileNotFoundException($"فایل اصلی پیدا نشد: {inputWavPath}");

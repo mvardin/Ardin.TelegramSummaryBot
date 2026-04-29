@@ -1,14 +1,17 @@
 ﻿using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 
 public class BaleClient
 {
+    private readonly IConfiguration _configuration;
     private readonly HttpClient _http = new();
     private readonly string _token;
 
-    public BaleClient(string token)
+    public BaleClient(IConfiguration configuration)
     {
-        _token = token;
+        _configuration = configuration;
+        _token = _configuration.GetValue<string>("AI:Token");
     }
 
     // --------------------------------------------------------
